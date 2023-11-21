@@ -62,11 +62,17 @@ public class Lox {
         // System.out.println(new AstPrinter().print(expression));
         // interpreter.interpret(expression);
 
+        Resolver resolver = new Resolver(interpreter);
+        resolver.resolve(statements);
+
+        // stop if there was a resolution error.
+        if (hadError) return;
+
         interpreter.interpret(statements);
 
-        for (Token token : tokens) {
-            System.out.println(token);
-        }
+        // for (Token token : tokens) {
+        //     System.out.println(token);
+        // }
     }
 
     static void error(int line, String message) {
