@@ -3,7 +3,9 @@ package myjlox.lox;
 import static myjlox.lox.TokenType.AND;
 import static myjlox.lox.TokenType.BANG;
 import static myjlox.lox.TokenType.BANG_EQUAL;
+import static myjlox.lox.TokenType.CLASS;
 import static myjlox.lox.TokenType.COMMA;
+import static myjlox.lox.TokenType.DOT;
 import static myjlox.lox.TokenType.ELSE;
 import static myjlox.lox.TokenType.EOF;
 import static myjlox.lox.TokenType.EQUAL;
@@ -32,6 +34,8 @@ import static myjlox.lox.TokenType.SEMICOLON;
 import static myjlox.lox.TokenType.SLASH;
 import static myjlox.lox.TokenType.STAR;
 import static myjlox.lox.TokenType.STRING;
+import static myjlox.lox.TokenType.SUPER;
+import static myjlox.lox.TokenType.THIS;
 import static myjlox.lox.TokenType.TRUE;
 import static myjlox.lox.TokenType.VAR;
 import static myjlox.lox.TokenType.WHILE;
@@ -75,6 +79,7 @@ class Parser {
 
     private Stmt declaration() {
         try {
+            if (match(CLASS)) return classDeclaration();
             if (match(FUN)) return function("function");
             if (match(VAR)) return varDeclaration();
 
@@ -83,6 +88,28 @@ class Parser {
             synchronize();
             return null;
         }
+    }
+
+    private Stmt classDeclaration() {
+        Token name = consume(IDENTIFIER, "Expect class name.");
+
+        // parse superclass
+        Expr.Variable superclass = null;
+        if (match(LESS)) {
+            consume(IDENTIFIER, "Expect superclass name.");
+            superclass = new Expr.Variable(previous());
+        }
+
+        consume(LEFT_BRACE, "Expect '{' before class body.");
+
+        List<Stmt.Function> methods = new ArrayList<>();
+        while (!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
+            methods.add(function("method"));
+        }
+
+        consume(RIGHT_BRACE, "Expect '}' after class body.");
+
+        return new Stmt.Class(name, superclass, methods);
     }
 
     private Stmt statement() {
@@ -245,6 +272,9 @@ class Parser {
             if (expr instanceof Expr.Variable) {
                 Token name = ((Expr.Variable)expr).name;
                 return new Expr.Assign(name, value);
+            } else if (expr instanceof Expr.Get) {
+                Expr.Get get = (Expr.Get)expr;
+                return new Expr.Set(get.object, get.name, value);
             }
 
             error(equals, "Invalid assignment target.");
@@ -364,6 +394,9 @@ class Parser {
         while (true) {
             if (match(LEFT_PAREN)) {
                 expr = finishCall(expr);
+            } else if (match(DOT)) {
+                Token name = consume(IDENTIFIER, "Expect property name after '.'.");
+                expr = new Expr.Get(expr, name);
             } else {
                 break;
             }
@@ -381,6 +414,15 @@ class Parser {
         if (match(NUMBER, STRING)) {
             return new Expr.Literal(previous().literal);
         }
+
+        if (match(SUPER)) {
+            Token keyword = previous();
+            consume(DOT, "Expect '.' after 'super'.");
+            Token method = consume(IDENTIFIER, "Expect superclass method name.");
+            return new Expr.Super(keyword, method);
+        }
+
+        if (match(THIS)) return new Expr.This(previous());
 
         if (match(IDENTIFIER)) {
             return new Expr.Variable(previous());
